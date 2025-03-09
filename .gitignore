@@ -1,0 +1,4 @@
+.env
+lunar_lander_world_model/**
+*.avi
+*.zip
