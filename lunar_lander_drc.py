@@ -1,6 +1,6 @@
 import gymnasium as gym
 import torch
-import google.generativeai as genai
+from google import genai
 import os
 import numpy as np
 import json
@@ -10,7 +10,7 @@ from world_models import LunarLanderWorldModel
 
 load_dotenv()
 
-client = genai.Client(api_key="GEMINI_API_KEY")
+ai_client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 
 world_model = LunarLanderWorldModel()
 world_model.load_state_dict(torch.load("lunar_lander_world_model/best_model_1.pth"))
@@ -22,13 +22,22 @@ CODE_CRITIC_PROMPT = open(os.path.join('prompts', 'lunar_lander_critic.md')).rea
 
 lunar_lander_policy = None
 
-def get_policy(observation, world_steps = 3, max_reflections = 3, manually_check_code = True):
+def parse_code(code: str):
+    code = code.strip()
+    start = code.index("```python") + 9
+    end = code.index("```", start + 8)
+    if start == -1 or end == -1:
+        return code
+    return code[start:end]
+
+def get_policy(observation, world_steps = 10, max_reflections = 3, manually_check_code = True):
     observation_str = str(observation)
     # Generate initial code
-    code = client.models.generate_content(
+    ai_response = ai_client.models.generate_content(
         model="gemini-2.0-flash",
         contents=[CODE_GENERATION_PROMPT, observation_str]
     )
+    code = parse_code(ai_response.text)
     if manually_check_code:
         print(code)
         print("Please check the code and write y to continue.")
@@ -41,6 +50,7 @@ def get_policy(observation, world_steps = 3, max_reflections = 3, manually_check
     # Declare function
     compiled_code = compile(code, "<string>", "exec")
     exec(compiled_code)
+    assert "lunar_lander_policy" in locals(), "Policy function not defined."
     for _ in range(max_reflections):
         # Simulate future steps
         future_states = []
@@ -55,17 +65,18 @@ def get_policy(observation, world_steps = 3, max_reflections = 3, manually_check
         # Critique code
         predict_dict = {'code': code, 'future_states': future_states}
         json_str = json.dumps(predict_dict)
-        feedback = client.models.generate_content(
+        feedback = ai_client.models.generate_content(
             model="gemini-2.0-flash",
             contents=[CODE_CRITIC_PROMPT, json_str]
         )
         feedback_json = json.loads(feedback)
         if feedback_json['stop'].lower() == "true":
             return lunar_lander_policy
-        code = client.models.generate_content(
+        ai_response = ai_client.models.generate_content(
             model="gemini-2.0-flash",
             contents=[CODE_GENERATION_PROMPT, feedback, code]
         )
+        code = parse_code(ai_response.text)
 
         if manually_check_code:
             print(code)
@@ -89,6 +100,7 @@ if __name__ == "__main__":
     while not done:
         cur_policy = get_policy(observation)
         for timestep in TIMESTEPS_BETWEEN_GENERATION:
+            env.render()
             action = lunar_lander_policy(observation)
             assert env.action_space.contains(action), "Invalid action."
             observation, reward, done, truncated, info = env.step(action)
