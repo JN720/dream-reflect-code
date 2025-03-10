@@ -52,8 +52,8 @@ def get_policy(observation, world_steps = 10, max_reflections = 3, manually_chec
     # Generate initial code
     ai_response = call_model(CODE_GENERATION_PROMPT, observation_str)
     code = parse_code(ai_response)
+    print(code)
     if manually_check_code:
-        print(code)
         print("Please check the code and write y to continue.")
         response = input()
         if response == "y":
@@ -96,8 +96,8 @@ def get_policy(observation, world_steps = 10, max_reflections = 3, manually_chec
         ai_response = call_model(CODE_GENERATION_PROMPT, feedback, code)
         code = parse_code(ai_response)
 
+        print(code)
         if manually_check_code:
-            print(code)
             print("Please check the feedback and write y to continue.")
             response = input()
             if response == "y":
@@ -120,7 +120,7 @@ if __name__ == "__main__":
     observation = env.reset()
     done = False
     while not done:
-        cur_policy = get_policy(observation, max_reflections = 0)
+        cur_policy = get_policy(observation, max_reflections = 2, manually_check_code = True)
         for timestep in range(TIMESTEPS_BETWEEN_GENERATION):
             env.render()
             if len(observation) == 2:
@@ -129,7 +129,6 @@ if __name__ == "__main__":
             assert env.action_space.contains(action), "Invalid action."
             observation, reward, done, truncated, info = env.step(action)
             rewards.append(reward)
-            print(rewards)
             if done or truncated:
                 done = True
                 break
