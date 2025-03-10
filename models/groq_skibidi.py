@@ -1,4 +1,4 @@
-from base_model import BaseModel
+from .base_model import BaseModel
 from groq import Groq
 
 class GroqModel(BaseModel):

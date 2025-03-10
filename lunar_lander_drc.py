@@ -1,6 +1,6 @@
 import gymnasium as gym
 import torch
-from google import genai
+from models.groq_skibidi import GroqModel
 import os
 import numpy as np
 import json
@@ -10,7 +10,7 @@ from world_models import LunarLanderWorldModel
 
 load_dotenv()
 
-ai_client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+ai_client = GroqModel(model_name="llama3-8b-8192", api_key=os.getenv("GROQ_API_KEY"))
 
 world_model = LunarLanderWorldModel()
 world_model.load_state_dict(torch.load("lunar_lander_world_model/best_model_1.pth"))
@@ -23,27 +23,30 @@ CODE_CRITIC_PROMPT = open(os.path.join('prompts', 'lunar_lander_critic.md')).rea
 lunar_lander_policy = None
 
 def parse_code(code: str):
-    code = code.strip()
-    start = code.index("```python") + 9
-    end = code.index("```", start + 9)
-    if start == -1 or end == -1:
+    try:
+        code = code.strip()
+        start = code.lower().index("```python") + 9
+        end = code.index("```", start + 9)
+        if start == -1 or end == -1:
+            return code
+        return code[start:end]
+    except:
         return code
-    return code[start:end]
+
 
 def parse_json(json_str: str):
-    text = json_str.strip()
-    start = text.index("```json") + 7
-    end = text.index("```", start + 7)
-    if start == -1 or end == -1:
+    try:
+        text = json_str.strip()
+        start = text.lower().index("```json") + 7
+        end = text.index("```", start + 7)
+        if start == -1 or end == -1:
+            return text
+        return text[start:end]
+    except:
         return text
-    return text[start:end]
 
 def call_model(*contents):
-    ai_response = ai_client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=contents
-    )
-    return ai_response.text
+    return ai_client.invoke(contents)
 
 def get_policy(observation, world_steps = 10, max_reflections = 3, manually_check_code = True):
     namespace = {}
@@ -115,7 +118,7 @@ def get_policy(observation, world_steps = 10, max_reflections = 3, manually_chec
     return lunar_lander_policy
 
 if __name__ == "__main__":
-    TIMESTEPS_BETWEEN_GENERATION = 50
+    TIMESTEPS_BETWEEN_GENERATION = 70
     rewards = []
     observation = env.reset()
     done = False

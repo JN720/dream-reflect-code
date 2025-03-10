@@ -3,3 +3,4 @@ lunar_lander_world_model/**
 *.avi
 *.zip
 __pycache__/**
+**/__pycache__/**
