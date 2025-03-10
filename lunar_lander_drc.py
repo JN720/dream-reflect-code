@@ -4,6 +4,7 @@ from models.groq_skibidi import GroqModel
 import os
 import numpy as np
 import json
+import cv2
 from dotenv import load_dotenv
 
 from world_models import LunarLanderWorldModel
@@ -12,10 +13,12 @@ load_dotenv()
 
 ai_client = GroqModel(model_name="llama3-8b-8192", api_key=os.getenv("GROQ_API_KEY"))
 
+WRITE_VIDEO = True
+
 world_model = LunarLanderWorldModel()
 world_model.load_state_dict(torch.load("lunar_lander_world_model/best_model_1.pth"))
 
-env = gym.make("LunarLander-v3", render_mode="human")
+env = gym.make("LunarLander-v3", render_mode="rgb_array" if WRITE_VIDEO else "human")
 
 CODE_GENERATION_PROMPT = open(os.path.join('prompts', 'lunar_lander_code.md')).read()
 CODE_CRITIC_PROMPT = open(os.path.join('prompts', 'lunar_lander_critic.md')).read()
@@ -122,10 +125,13 @@ if __name__ == "__main__":
     rewards = []
     observation = env.reset()
     done = False
+    frames = []
     while not done:
         cur_policy = get_policy(observation, max_reflections = 2, manually_check_code = True)
         for timestep in range(TIMESTEPS_BETWEEN_GENERATION):
-            env.render()
+            frame = env.render()
+            if WRITE_VIDEO:
+                frames.append(frame)
             if len(observation) == 2:
                 observation = observation[0]
             action = cur_policy(torch.tensor(observation, dtype = torch.float32))
@@ -140,3 +146,15 @@ if __name__ == "__main__":
     print("Total Timesteps:", len(rewards))
     print("Total Reward:", sum(rewards))
     print("Average Reward:", sum(rewards) / len(rewards))
+
+    if WRITE_VIDEO:
+        height, width, _ = frames[0].shape
+        fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+        video = cv2.VideoWriter('lunar_lander_drc.avi', fourcc, 20.0, (width, height))
+
+        for frame in frames:
+            frame = np.array(frame, dtype = np.uint8)
+            frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            video.write(frame)
+
+        video.release()
