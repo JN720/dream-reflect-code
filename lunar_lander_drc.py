@@ -25,19 +25,33 @@ lunar_lander_policy = None
 def parse_code(code: str):
     code = code.strip()
     start = code.index("```python") + 9
-    end = code.index("```", start + 8)
+    end = code.index("```", start + 9)
     if start == -1 or end == -1:
         return code
     return code[start:end]
 
-def get_policy(observation, world_steps = 10, max_reflections = 3, manually_check_code = True):
-    observation_str = str(observation)
-    # Generate initial code
+def parse_json(json_str: str):
+    text = json_str.strip()
+    start = text.index("```json") + 7
+    end = text.index("```", start + 7)
+    if start == -1 or end == -1:
+        return text
+    return text[start:end]
+
+def call_model(*contents):
     ai_response = ai_client.models.generate_content(
         model="gemini-2.0-flash",
-        contents=[CODE_GENERATION_PROMPT, observation_str]
+        contents=contents
     )
-    code = parse_code(ai_response.text)
+    return ai_response.text
+
+def get_policy(observation, world_steps = 10, max_reflections = 3, manually_check_code = True):
+    namespace = {}
+    observation_str = str(observation)
+
+    # Generate initial code
+    ai_response = call_model(CODE_GENERATION_PROMPT, observation_str)
+    code = parse_code(ai_response)
     if manually_check_code:
         print(code)
         print("Please check the code and write y to continue.")
@@ -49,8 +63,9 @@ def get_policy(observation, world_steps = 10, max_reflections = 3, manually_chec
             return lunar_lander_policy
     # Declare function
     compiled_code = compile(code, "<string>", "exec")
-    exec(compiled_code)
-    assert "lunar_lander_policy" in locals(), "Policy function not defined."
+    exec(compiled_code, namespace)
+    assert "lunar_lander_policy" in namespace, "Policy function not defined."
+    lunar_lander_policy = namespace["lunar_lander_policy"]
     for _ in range(max_reflections):
         # Simulate future steps
         future_states = []
@@ -58,25 +73,28 @@ def get_policy(observation, world_steps = 10, max_reflections = 3, manually_chec
             state = observation
             for _ in range(world_steps):
                 assert lunar_lander_policy is not None, "Policy function not defined."
+                if len(state) == 2:
+                    state = state[0]
+                state = torch.tensor(state, dtype = torch.float32)
                 action = lunar_lander_policy(state)
-                world_model_input = np.array([*state, action], dtype = np.float32)
+                action_array = np.zeros(4, dtype = np.float32)
+                action_array[action] = 1
+                world_model_input = torch.tensor(np.array([*state, *action_array], dtype = np.float32))
                 state = world_model(world_model_input)
                 future_states.append(state)
         # Critique code
-        predict_dict = {'code': code, 'future_states': future_states}
+        predict_dict = {'code': code, 'future_states': str(future_states)}
         json_str = json.dumps(predict_dict)
-        feedback = ai_client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=[CODE_CRITIC_PROMPT, json_str]
-        )
+        feedback = call_model(CODE_CRITIC_PROMPT, json_str)
+        print(feedback)
+        feedback = parse_json(feedback)
         feedback_json = json.loads(feedback)
-        if feedback_json['stop'].lower() == "true":
+        stop = feedback_json.get('stop', False)
+        if stop:
             return lunar_lander_policy
-        ai_response = ai_client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=[CODE_GENERATION_PROMPT, feedback, code]
-        )
-        code = parse_code(ai_response.text)
+
+        ai_response = call_model(CODE_GENERATION_PROMPT, feedback, code)
+        code = parse_code(ai_response)
 
         if manually_check_code:
             print(code)
@@ -89,7 +107,11 @@ def get_policy(observation, world_steps = 10, max_reflections = 3, manually_chec
                 return lunar_lander_policy
         # Declare function
         compiled_code = compile(code, "<string>", "exec")
-        exec(compiled_code)
+        namespace = {}
+        exec(compiled_code, namespace)
+        assert "lunar_lander_policy" in namespace, "Policy function not defined."
+        lunar_lander_policy = namespace['lunar_lander_policy']
+    assert lunar_lander_policy is not None, "Policy function not defined."
     return lunar_lander_policy
 
 if __name__ == "__main__":
@@ -98,10 +120,12 @@ if __name__ == "__main__":
     observation = env.reset()
     done = False
     while not done:
-        cur_policy = get_policy(observation)
-        for timestep in TIMESTEPS_BETWEEN_GENERATION:
+        cur_policy = get_policy(observation, max_reflections = 0)
+        for timestep in range(TIMESTEPS_BETWEEN_GENERATION):
             env.render()
-            action = lunar_lander_policy(observation)
+            if len(observation) == 2:
+                observation = observation[0]
+            action = cur_policy(torch.tensor(observation, dtype = torch.float32))
             assert env.action_space.contains(action), "Invalid action."
             observation, reward, done, truncated, info = env.step(action)
             rewards.append(reward)
