@@ -1,5 +1,5 @@
 from base_model import BaseModel
-from models.groq_skibidi import Groq
+from groq import Groq
 
 class GroqModel(BaseModel):
     def __init__(self, model_name, api_key):
