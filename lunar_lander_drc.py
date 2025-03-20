@@ -8,6 +8,7 @@ import cv2
 from dotenv import load_dotenv
 
 from world_models import LunarLanderWorldModel
+from utils import parse_code, parse_json
 
 load_dotenv()
 
@@ -24,29 +25,6 @@ CODE_GENERATION_PROMPT = open(os.path.join('prompts', 'lunar_lander_code.md')).r
 CODE_CRITIC_PROMPT = open(os.path.join('prompts', 'lunar_lander_critic.md')).read()
 
 lunar_lander_policy = None
-
-def parse_code(code: str):
-    try:
-        code = code.strip()
-        start = code.lower().index("```python") + 9
-        end = code.index("```", start + 9)
-        if start == -1 or end == -1:
-            return code
-        return code[start:end]
-    except:
-        return code
-
-
-def parse_json(json_str: str):
-    try:
-        text = json_str.strip()
-        start = text.lower().index("```json") + 7
-        end = text.index("```", start + 7)
-        if start == -1 or end == -1:
-            return text
-        return text[start:end]
-    except:
-        return text
 
 def call_model(*contents):
     return ai_client.invoke(contents)
