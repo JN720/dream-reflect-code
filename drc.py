@@ -54,7 +54,7 @@ class DreamReflectCode():
                 state = state[:-1]
                 if done:
                     break
-                future_states.append(state[:-1])
+                future_states.append(state)
         return future_states
     
     def _generate_policy(self, *contents):
