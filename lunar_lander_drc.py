@@ -1,6 +1,6 @@
 import gymnasium as gym
 import torch
-from models.groq_skibidi import GroqModel
+from models.groq import GroqModel
 import os
 import numpy as np
 import json
@@ -16,8 +16,8 @@ ai_client = GroqModel(model_name="llama3-8b-8192", api_key=os.getenv("GROQ_API_K
 
 WRITE_VIDEO = True
 
-world_model = LunarLanderWorldModel()
-world_model.load_state_dict(torch.load("lunar_lander_world_model/best_model_1.pth"))
+# world_model = LunarLanderWorldModel()
+# world_model.load_state_dict(torch.load("lunar_lander_world_model/best_model_1.pth"))
 
 env = gym.make("LunarLander-v3", render_mode="rgb_array" if WRITE_VIDEO else "human")
 
@@ -105,7 +105,7 @@ if __name__ == "__main__":
     done = False
     frames = []
     while not done:
-        cur_policy = get_policy(observation, max_reflections = 2, manually_check_code = True)
+        cur_policy = get_policy(observation, max_reflections = 0, manually_check_code = True)
         for timestep in range(TIMESTEPS_BETWEEN_GENERATION):
             frame = env.render()
             if WRITE_VIDEO:
