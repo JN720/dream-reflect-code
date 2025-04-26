@@ -13,6 +13,7 @@ class DreamReflectCode():
             world_model, 
             code_generation_prompt: str,
             code_critic_prompt: str,
+            function_name: str,
             max_reflections=3, 
             max_simulation_timesteps=100, 
             manually_check_code=True, 
@@ -22,6 +23,7 @@ class DreamReflectCode():
         self.world_model = world_model
         self.code_generation_prompt = code_generation_prompt
         self.code_critic_prompt = code_critic_prompt
+        self.function_name = function_name
         self.max_reflections = max_reflections
         self.max_simulation_timesteps = max_simulation_timesteps
         if postprocess_action is None:
@@ -73,8 +75,8 @@ class DreamReflectCode():
         compiled_code = compile(code, "<string>", "exec")
         namespace = {}
         exec(compiled_code, namespace)
-        assert "lunar_lander_policy" in namespace, "Policy function not defined."
-        self.policy = namespace["lunar_lander_policy"]
+        assert self.function_name in namespace, "Policy function not defined."
+        self.policy = namespace[self.function_name]
         self.policy_code = code
     
     def _generate_critique(self, code, future_states) -> tuple[bool, str]:
@@ -148,7 +150,7 @@ class DreamReflectCode():
         if write_video:
             height, width, _ = frames[0].shape
             fourcc = cv2.VideoWriter_fourcc(*'MJPG')
-            video = cv2.VideoWriter('lunar_lander_drc.avi', fourcc, 20.0, (width, height))
+            video = cv2.VideoWriter(self.function_name[:-6] + 'drc.avi', fourcc, 20.0, (width, height))
 
             for frame in frames:
                 frame = np.array(frame, dtype = np.uint8)
@@ -185,6 +187,7 @@ if __name__ == '__main__':
         world_model=world_model,
         code_generation_prompt=CODE_GENERATION_PROMPT,
         code_critic_prompt=CODE_CRITIC_PROMPT,
+        function_name = 'lunar_lander_policy',
         max_reflections=1,
         max_simulation_timesteps=100,
         manually_check_code=True,
