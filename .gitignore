@@ -1,5 +1,5 @@
 .env
-lunar_lander_world_model/**
+*_world_model/**
 *.avi
 *.zip
 __pycache__/**
